@@ -21,30 +21,15 @@ __kernel void coulomb(const __global float *charges,
   int num_group_x = get_num_groups(0);
   int num_group_y = get_num_groups(1);
 
-  __local float storage[GROUP_SIZE * GROUP_SIZE];
-
   float value = 0;
   if (global_x > global_y) {
-    value = scale[global_y * global_size_x + global_x] * C *
-            charges[global_x] * charges[global_y] /
-            distance(coords[global_x], coords[global_y]);
+    value = scale[global_y * global_size_x + global_x] * C * charges[global_x] *
+            charges[global_y] / distance(coords[global_x], coords[global_y]);
   }
-  storage[local_size_x * local_y + local_x] = value;
 
-  barrier(CLK_LOCAL_MEM_FENCE);
-
+  value = work_group_reduce_add(value);
   if (local_x == 0 && local_y == 0) {
-    float4 sum = (float4)(0,0,0,0);
-    int sz = local_size_y * local_size_x;
-    int i = 0;
-    for (int div4 = sz / 4; i < div4; i += 4) {
-      float4 *p = (float4 *)(storage + i);
-      sum += *p;
-    }
-    for (; i < sz; i++) {
-      sum.x += storage[i];
-    }
-    output[group_x * num_group_y + group_y] = dot(sum, (float4)(1.0f, 1.0f, 1.0f, 1.0f));;
+    output[group_x * num_group_y + group_y] = value;
   }
 }
 
